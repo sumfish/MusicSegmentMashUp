@@ -4,6 +4,7 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 import torch.nn.functional as F
 import dataset
+from torch.utils.data.sampler import SubsetRandomSampler
 import numpy as np
 from torch.utils.data import DataLoader
 from visdom import Visdom
@@ -15,17 +16,28 @@ data_path='./audio_docu/'
 batch_size=16  #no16
 test_batch_size=100
 log_interval=10
+train_split = .2
+shuffle_dataset =True
 
 def main():
     # device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
  
     # dataset
+    # train & validation
     train_data=dataset.MusicSet('data_train.txt')
-    trainloader = DataLoader(dataset=train_data, batch_size=batch_size,shuffle=True)
+    # Creating data indices for training and validation splits:
+    train_size = int(train_split* len(train_data))
+    test_size = len(train_data) - train_size
+    train_dataset, vali_dataset = torch.utils.data.random_split(train_data, [train_size, test_size])
+    
+    trainloader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+    validationloader = DataLoader(dataset=vali_dataset, batch_size=batch_size, shuffle=True)
+    '''
+    # test
     test_data=dataset.MusicSet('data_test.txt')
     testloader = DataLoader(dataset=test_data, batch_size=test_batch_size,shuffle=True)
-
+    '''
     # model
     #model = CDSSM().to(device)
     model = CDSSM()
@@ -36,7 +48,7 @@ def main():
 
     # draw 
     vis = Visdom(env='music')
-    
+
     for epoch in range(n_epochs):
         # train stage
         train_loss = train(device, model, trainloader, criterion, optimizer)
@@ -45,7 +57,7 @@ def main():
         #     opts={'title': 'train loss'})
 
         # test stage
-        val_loss = test(device, model, testloader, criterion, optimizer)
+        val_loss = test(device, model, validationloader, criterion, optimizer)
         #val_loss /= len(testloader)
         message += 'Epoch: {}/{}. Validation set: Average loss: {:.6f}'.format(epoch + 1, n_epochs, val_loss)
         
