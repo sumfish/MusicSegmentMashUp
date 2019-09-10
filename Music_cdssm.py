@@ -53,16 +53,16 @@ def main():
         # train stage
         train_loss = train(device, model, trainloader, criterion, optimizer)
         message = 'Epoch: {}/{}. Train set: Average loss: {:.6f}\n'.format(epoch + 1, n_epochs, train_loss)
-        #vis.line(X=torch.FloatTensor([epoch+1]), Y=torch.FloatTensor([train_loss]), win='loss', update='append' if epoch+1 >0  else None,
-        #     opts={'title': 'train loss'})
+        vis.line(X=torch.FloatTensor([epoch+1]), Y=torch.FloatTensor([train_loss]), win='train_loss', update='append' if epoch+1 >0  else None,
+             opts={'title': 'train loss'})
 
         # test stage
         val_loss = test(device, model, validationloader, criterion, optimizer)
         #val_loss /= len(testloader)
         message += 'Epoch: {}/{}. Validation set: Average loss: {:.6f}'.format(epoch + 1, n_epochs, val_loss)
         
-        vis.line(X=np.column_stack((np.array([epoch+1]),np.array([epoch+1]))), Y=np.column_stack((np.array([train_loss]),np.array([val_loss]))), win='loss', update='append' if epoch+1 >0  else None
-            ,opts=dict(title='train&validation loss', legend=['train', 'validation'])) 
+        #vis.line(X=np.column_stack((np.array([epoch+1]),np.array([epoch+1]))), Y=np.column_stack((np.array([train_loss]),np.array([val_loss]))), win='loss', update='append' if epoch+1 >0  else None
+        #    ,opts=dict(title='train&validation loss', legend=['train', 'validation'])) 
         print(message)
 
 def train(device, model, trainloader, criterion, optimizer):
