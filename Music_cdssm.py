@@ -12,11 +12,10 @@ from model import CDSSM
 
 neg_num = 2 # Number of random unclicked documents serving as negative examples for a query. See section 4.
 n_epochs=100
-data_path='./audio_docu/'
 batch_size=16  #no16
 test_batch_size=100
 log_interval=10
-train_split = .2
+vali_split = .2
 shuffle_dataset =True
 
 def main():
@@ -25,11 +24,11 @@ def main():
  
     # dataset
     # train & validation
-    train_data=dataset.MusicSet('data_train.txt')
+    train_data=dataset.MusicSet('datas_train.txt')
     # Creating data indices for training and validation splits:
-    train_size = int(train_split* len(train_data))
-    test_size = len(train_data) - train_size
-    train_dataset, vali_dataset = torch.utils.data.random_split(train_data, [train_size, test_size])
+    train_size = int((1-vali_split)* len(train_data))
+    vali_size = len(train_data) - train_size
+    train_dataset, vali_dataset = torch.utils.data.random_split(train_data, [train_size, vali_size])
     
     trainloader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     validationloader = DataLoader(dataset=vali_dataset, batch_size=batch_size, shuffle=True)
@@ -44,7 +43,7 @@ def main():
 
     # Loss and optimizer
     criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.4)
 
     # draw 
     vis = Visdom(env='music')
@@ -80,7 +79,7 @@ def train(device, model, trainloader, criterion, optimizer):
         model=model.double().to(device)
         y_pred = model(Q, P, N_list)
         '''
-        model=model.double()
+        model=model.float()
         y_pred = model(Q, P, N)
         #print(y_pred)
         n_correct=0
@@ -103,6 +102,8 @@ def train(device, model, trainloader, criterion, optimizer):
         y = np.ndarray(len(y_pred))
         y[:] = 0
         y = Variable(torch.from_numpy(y).long())
+        #print(a)
+        #print(y)
         loss = criterion(a, y) #Input&target
         #print(loss)
 
@@ -131,15 +132,13 @@ def test(device, model, testloader, criterion, optimizer):
         losses=[]
         for batch_idx, (Q, P, N) in enumerate(testloader):
         
-            model=model.double()
+            model=model.float()
             y_pred = model(Q, P, N)
             
             n_correct=0
             for i in range(len(y_pred)):
                 record=y_pred[i].resize(1,neg_num+1).float()
                 _,idx=torch.max(record,dim=1)
-                #print(record)
-                #print(idx)
                 if(idx==0):
                     n_correct+=1
                 if i==0:
@@ -147,7 +146,6 @@ def test(device, model, testloader, criterion, optimizer):
                 else:
                     b=record
                     a=torch.cat((a,b),0)
-                #y_pred_list.append(y_pred[i].resize(1,J+1))
             acc=float(n_correct)/len(y_pred)
 
             ### CrossEntropyLoss expects only the index as a long tensor
@@ -155,7 +153,6 @@ def test(device, model, testloader, criterion, optimizer):
             y[:] = 0
             y = Variable(torch.from_numpy(y).long())
             loss = criterion(a, y) #Input&target
-            #print(loss)
 
             losses.append(loss.item())
             val_loss+=loss.item()
