@@ -7,21 +7,22 @@ import librosa.display
 import numpy as np
 from PIL import Image
 
-chroma_folder = './chroma/'
-music_folder='./music_segments/'
+music_folder='./better_music_segments/'
 #data_path='./audio_docu/'
-data_path='./_sub_data/'
+data_path='./better_music_segments_docu/'
 filename_txt='filenames.txt'
 label_txt='labels.txt'
 neg_nums=2 ## can adjust 
-
-avgv = np.load(data_path + 'avg.npy')
-stdv = np.load(data_path + 'std.npy')
+#avgv = np.load(data_path + 'avg.npy')
+#stdv = np.load(data_path + 'std.npy')
 
 def default_audio_loader(data, S_max):
-    y, _ = librosa.core.load(music_folder+data, sr=22050)
+    y, sr = librosa.core.load(music_folder+data, sr=22050)
     S = librosa.feature.melspectrogram(y, sr=22050, n_fft=2048, hop_length=512, n_mels=128)
+    #S = librosa.feature.chroma_stft(y=y, sr=sr,
+    #       n_chroma=12, n_fft=4096)
     #print(S.shape)#(128, N)
+    #print('S={}'.format(S))
     if S.shape[-1] > S_max:
         S = S[:, :S_max]
         #print(S.shape)
@@ -29,9 +30,10 @@ def default_audio_loader(data, S_max):
         S = np.pad(S, ((0,0), (0, max(0, S_max-S.shape[-1]))),'constant', constant_values=(0))
     #print(S.shape) #(128, S_max)
     #S = np.transpose(np.log(1+10000*S))
-    S = np.transpose(np.log(1+1000*S))
+    #S = np.transpose(np.log(1+1000*S))
+    S = S.transpose()
     #print(S.shape) #(S_max, 128)
-    S = (S-avgv)/stdv
+    #S = (S-avgv)/stdv
     #S = np.expand_dims(S, 2) # (N, 128, 1)
     #print(S.shape)
     return S
@@ -127,8 +129,8 @@ class MusicSet(Dataset):
         return len(self.seeds)
 
 
-test_data=MusicSet('data_test.txt')
-train_data=MusicSet('data_train.txt')
+#test_data=MusicSet('data_test.txt')
+#train_data=MusicSet('datas_train.txt').__getitem__(0)
 '''
 trainloader = DataLoader(dataset=train_data, batch_size=16,shuffle=True)
 test_loader = DataLoader(dataset=test_data, batch_size=16)
