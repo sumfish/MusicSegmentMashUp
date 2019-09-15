@@ -12,8 +12,8 @@ from model import CDSSM
 
 neg_num = 2 # Number of random unclicked documents serving as negative examples for a query. See section 4.
 n_epochs=100
-batch_size=16  #no16
-test_batch_size=100
+batch_size=64  #no16
+test_batch_size=64
 log_interval=10
 vali_split = .2
 shuffle_dataset =True
@@ -25,6 +25,7 @@ def main():
     # dataset
     # train & validation
     train_data=dataset.MusicSet('datas_train.txt')
+    
     # Creating data indices for training and validation splits:
     train_size = int((1-vali_split)* len(train_data))
     vali_size = len(train_data) - train_size
@@ -32,18 +33,18 @@ def main():
     
     trainloader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     validationloader = DataLoader(dataset=vali_dataset, batch_size=batch_size, shuffle=True)
-    '''
+    
     # test
-    test_data=dataset.MusicSet('data_test.txt')
-    testloader = DataLoader(dataset=test_data, batch_size=test_batch_size,shuffle=True)
-    '''
+    test_dataset=dataset.MusicSet('datas_test.txt')
+    testloader = DataLoader(dataset=test_dataset, batch_size=test_batch_size,shuffle=True)
+    
     # model
     #model = CDSSM().to(device)
     model = CDSSM()
 
     # Loss and optimizer
     criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.4)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, momentum=0.4)
 
     # draw 
     vis = Visdom(env='music')
@@ -52,17 +53,16 @@ def main():
         # train stage
         train_loss = train(device, model, trainloader, criterion, optimizer)
         message = 'Epoch: {}/{}. Train set: Average loss: {:.6f}\n'.format(epoch + 1, n_epochs, train_loss)
-        vis.line(X=torch.FloatTensor([epoch+1]), Y=torch.FloatTensor([train_loss]), win='train_loss', update='append' if epoch+1 >0  else None,
-             opts={'title': 'train loss'})
 
-        # test stage
+        # vali stage
         val_loss = test(device, model, validationloader, criterion, optimizer)
-        #val_loss /= len(testloader)
         message += 'Epoch: {}/{}. Validation set: Average loss: {:.6f}'.format(epoch + 1, n_epochs, val_loss)
-        
-        #vis.line(X=np.column_stack((np.array([epoch+1]),np.array([epoch+1]))), Y=np.column_stack((np.array([train_loss]),np.array([val_loss]))), win='loss', update='append' if epoch+1 >0  else None
-        #    ,opts=dict(title='train&validation loss', legend=['train', 'validation'])) 
         print(message)
+
+        #vis.line(X=torch.FloatTensor([epoch+1]), Y=torch.FloatTensor([train_loss]), win='train_loss', update='append' if epoch+1 >0  else None,
+        #     opts={'title': 'train loss'})
+        vis.line(X=np.column_stack((np.array([epoch+1]),np.array([epoch+1]))), Y=np.column_stack((np.array([train_loss]),np.array([val_loss]))), win='loss', update='append' if epoch+1 >0  else None
+            ,opts=dict(title='train&validation loss', legend=['train', 'validation'])) 
 
 def train(device, model, trainloader, criterion, optimizer):
     model.train()
@@ -119,9 +119,8 @@ def train(device, model, trainloader, criterion, optimizer):
                 batch_idx * len(Q), len(trainloader.dataset),
                 100. * batch_idx / len(trainloader), np.mean(losses),acc)
             print(message)
-            # print(len(trainloader))
-            loss=[]
-
+            
+    #print(total_loss)
     total_loss/=(batch_idx+1)
     return total_loss
 
@@ -131,10 +130,8 @@ def test(device, model, testloader, criterion, optimizer):
         val_loss=0
         losses=[]
         for batch_idx, (Q, P, N) in enumerate(testloader):
-        
             model=model.float()
             y_pred = model(Q, P, N)
-            
             n_correct=0
             for i in range(len(y_pred)):
                 record=y_pred[i].resize(1,neg_num+1).float()
@@ -163,7 +160,7 @@ def test(device, model, testloader, criterion, optimizer):
                     batch_idx * len(Q), len(testloader.dataset),
                     100. * batch_idx / len(testloader), np.mean(losses),acc)
                 print(message)
-                loss=[]
+                
         val_loss/=(batch_idx+1)
     return val_loss
 
