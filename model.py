@@ -4,14 +4,15 @@ import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Variable
 
-WORD_DEPTH = 128 # See equation (1).
+WORD_DEPTH = 12 # See equation (1).
 # Uncomment it, if testing
 # WORD_DEPTH = 1000
 K = 64 # Dimensionality of the max-pooling layer. See section 3.4.
-L = 32 # Dimensionality of latent semantic space. See section 3.5.
+K2 = 64
+L = 16 # Dimensionality of latent semantic space. See section 3.5.
 J = 2 # Number of random unclicked documents serving as negative examples for a query. See section 4.
 # kernel size of time(word_depth*time)
-FILTER_LENGTH = 1 # We only consider one time step for convolutions.
+FILTER_LENGTH = 3 # We only consider one time step for convolutions.
 
 def kmax_pooling(x, dim, k):
     ### get max vlaue across time of feature map
@@ -24,49 +25,60 @@ class CDSSM(nn.Module):
         super(CDSSM, self).__init__()
         # layers for query
         self.query_conv = nn.Conv1d(WORD_DEPTH, K, FILTER_LENGTH)
-        self.query_sem = nn.Linear(K, L)
+        self.query_conv1 = nn.Conv1d(K, K2, FILTER_LENGTH)
+        self.query_sem = nn.Linear(K2, L)
         # layers for docs
         self.doc_conv = nn.Conv1d(WORD_DEPTH, K, FILTER_LENGTH)
-        self.doc_sem = nn.Linear(K, L)
+        self.doc_conv1 = nn.Conv1d(K, K2, FILTER_LENGTH)
+        self.doc_sem = nn.Linear(K2, L)
         # learning gamma
         self.learn_gamma = nn.Conv1d(1, 1, 1)
 
     def forward(self, q, pos, negs):
         size=len(q)
-        #print(size)
-        # Query model. The paper uses separate neural nets for queries and documents (see section 5.2).
         # To make it compatible with Conv layer we reshape it to: (batch_size, WORD_DEPTH, query_len)
-        q = q.transpose(1,2)
+        q = q.transpose(1,2) #[N, WORD_DEPTH(12 or 128), query_len(100)]
         #print("1:{}".format(q.shape))
-        q_c = F.tanh(self.query_conv(q))
+
+        q_c = torch.tanh(self.query_conv(q)) #[N, K, query_len(98)]
+        #print("1:{}".format(q_c.shape))
+
+        q_c = torch.tanh(self.query_conv1(q_c)) #[N, K2, query_len(96)]
         #print("2:{}".format(q_c.shape))
-        #print(q_c)
+
         # Next, we apply a max-pooling layer to the convolved query matrix.
-        q_k = kmax_pooling(q_c, 2, 1)
+        q_k = kmax_pooling(q_c, 2, 1) #[N, K2, 1]
         #print("3:{}".format(q_k.shape))
-        q_k = q_k.transpose(1,2)
+
+        q_k = q_k.transpose(1,2) #[N, 1, K2]
+        #print("3:{}".format(q_k.shape))
+
         # In this step, we generate the semantic vector represenation of the query. This
-        # is a standard neural network dense layer, i.e., y = tanh(W_s • v + b_s). Again,
-        # the paper does not include bias units.
-        q_s = F.tanh(self.query_sem(q_k))
+        # is a standard neural network dense layer, i.e., y = tanh(W_s • v + b_s). 
+        q_s = torch.tanh(self.query_sem(q_k)) #[N, 1, L]
         #print("4:{}".format(q_s.shape))
         #print(q_s)
-        q_s = q_s.resize(size,L)
-        #print("5:{}".format(q_s.shape))
+
+        q_s = q_s.resize(size,L) #[N,L]
+        #print("5:{}".format(q_s.shape)) 
         #print(q_s)
+
         # # The document equivalent of the above query model for positive document
         pos = pos.transpose(1,2)
-        pos_c = F.tanh(self.doc_conv(pos))
+        pos_c = torch.tanh(self.doc_conv(pos))
+        pos_c = torch.tanh(self.doc_conv1(pos_c))
         pos_k = kmax_pooling(pos_c, 2, 1)
         pos_k = pos_k.transpose(1,2)
-        pos_s = F.tanh(self.doc_sem(pos_k))
+        pos_s = torch.tanh(self.doc_sem(pos_k))
         pos_s = pos_s.resize(size,L)
+
         # # The document equivalent of the above query model for negative documents
         negs = [neg.transpose(1,2) for neg in negs]
-        neg_cs = [F.tanh(self.doc_conv(neg)) for neg in negs]
+        neg_cs = [torch.tanh(self.doc_conv(neg)) for neg in negs]
+        neg_cs = [torch.tanh(self.doc_conv1(neg)) for neg in neg_cs]
         neg_ks = [kmax_pooling(neg_c, 2, 1) for neg_c in neg_cs]
         neg_ks = [neg_k.transpose(1,2) for neg_k in neg_ks]
-        neg_ss = [F.tanh(self.doc_sem(neg_k)) for neg_k in neg_ks]
+        neg_ss = [torch.tanh(self.doc_sem(neg_k)) for neg_k in neg_ks]
         neg_ss = [neg_s.resize(size,L) for neg_s in neg_ss]
         #print("6:{}".format(neg_ss.shape))
         
@@ -90,11 +102,7 @@ class CDSSM(nn.Module):
             dot=Variable(torch.from_numpy(np.array(dot)))
             dots[i].append(dot)
         #print(dots)
-        #print(neg_ss)
-        '''
-        print(dots)
-        input()
-        '''
+        
         for i in range(size):
             for j in range(J):
                 #neg_ss[j][i].data.numpy()
@@ -117,7 +125,8 @@ class CDSSM(nn.Module):
         # a single 1 x 1 kernel.
             with_gamma = self.learn_gamma(do.resize(J+1, 1, 1))
         # Finally, we use the softmax function to calculate P(D+|Q).
+            print(with_gamma)
             prob = F.softmax(with_gamma)
             probs.append(prob)
-        #print(probs)
+        print(probs)
         return probs
