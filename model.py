@@ -4,12 +4,12 @@ import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Variable
 
-WORD_DEPTH = 12 # See equation (1).
+WORD_DEPTH = 128 # See equation (1).
 # Uncomment it, if testing
 # WORD_DEPTH = 1000
-K = 64 # Dimensionality of the max-pooling layer. See section 3.4.
-K2 = 64
-L = 16 # Dimensionality of latent semantic space. See section 3.5.
+K = 128 # Dimensionality of the max-pooling layer. See section 3.4.
+K2 = 128
+L = 64 # Dimensionality of latent semantic space. See section 3.5.
 J = 2 # Number of random unclicked documents serving as negative examples for a query. See section 4.
 # kernel size of time(word_depth*time)
 FILTER_LENGTH = 3 # We only consider one time step for convolutions.
@@ -125,8 +125,8 @@ class CDSSM(nn.Module):
         # a single 1 x 1 kernel.
             with_gamma = self.learn_gamma(do.resize(J+1, 1, 1))
         # Finally, we use the softmax function to calculate P(D+|Q).
-            print(with_gamma)
+            #print(with_gamma)
             prob = F.softmax(with_gamma)
             probs.append(prob)
-        print(probs)
+        #print(probs)
         return probs
